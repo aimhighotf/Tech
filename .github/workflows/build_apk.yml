@@ -1,9 +1,47 @@
-- name: Create Release
-  uses: softprops/action-gh-release@v1
-  if: success()
-  with:
-    files: artifacts/*.apk
-    tag_name: "v$(date +'%Y.%m.%d')"
-    name: "AimHigh $(date +'%Y.%m.%d')"
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+name: Build APK on GitHub
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # Prevent hanging builds
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq \
+            git zip unzip python3-pip openjdk-17-jdk \
+            zlib1g-dev libncurses5-dev libgdbm-dev \
+            libnss3-dev libssl-dev libsqlite3-dev \
+            libreadline-dev libffi-dev libbz2-dev
+
+    - name: Install Buildozer
+      run: |
+        pip install --upgrade pip
+        pip install buildozer cython==0.29.36 virtualenv
+
+    - name: Build APK
+      run: |
+        mkdir -p artifacts
+        buildozer init
+        buildozer -v android debug 2>&1 | tee build.log
+        cp bin/*.apk artifacts/
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4  # Updated to v4
+      with:
+        name: aimhigh-apk
+        path: |
+          artifacts/*.apk
+          build.log
+        retention-days: 5
