@@ -1,27 +1,9 @@
-name: Build APK on GitHub
-
-on: [push, workflow_dispatch]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    container: ubuntu:22.04
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Make script executable
-      run: chmod +x build_aimhigh.sh
-
-    - name: Run APK Builder
-      run: ./build_aimhigh.sh
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v3
-      with:
-        name: aimhigh-apk
-        path: |
-          ${{ github.workspace }}/artifacts/*.apk
-          ${{ github.workspace }}/build.log
-        retention-days: 5
+- name: Create Release
+  uses: softprops/action-gh-release@v1
+  if: success()
+  with:
+    files: artifacts/*.apk
+    tag_name: "v$(date +'%Y.%m.%d')"
+    name: "AimHigh $(date +'%Y.%m.%d')"
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
