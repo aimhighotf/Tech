@@ -4,7 +4,7 @@ on: [push, workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     
     steps:
@@ -17,17 +17,28 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Install Android tools
+    - name: Install Android SDK and tools
+      run: |
+        # Install Android Command Line Tools
+        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip commandlinetools-linux-*.zip -d cmdline-tools
+        mv cmdline-tools/cmdline-tools cmdline-tools/latest
+        
+        # Set environment variables
+        echo "ANDROID_HOME=$PWD" >> $GITHUB_ENV
+        echo "$PWD/cmdline-tools/latest/bin:$PWD/platform-tools" >> $GITHUB_PATH
+        
+        # Accept licenses and install packages
+        yes | ./cmdline-tools/latest/bin/sdkmanager --licenses
+        ./cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" "platform-tools" "platforms;android-33" "ndk;25.2.9519653"
+
+    - name: Install system dependencies
       run: |
         sudo apt-get update -qq
         sudo apt-get install -y -qq \
             git zip unzip python3-pip \
             zlib1g-dev libncurses5-dev \
-            liblzma-dev lzma \
-            android-sdk-build-tools
-
-        # Install Aidl specifically
-        sudo apt-get install -y -qq android-sdk-aidl
+            liblzma-dev lzma
 
     - name: Set up Buildozer
       run: |
@@ -42,23 +53,24 @@ jobs:
         buildozer init
         cat >> buildozer.spec <<EOL
         # Android specific
-        android.sdk_path = /usr/lib/android-sdk
-        android.ndk_path = /usr/lib/android-ndk
+        android.sdk_path = $ANDROID_HOME
+        android.ndk_path = $ANDROID_HOME/ndk/25.2.9519653
+        android.ndk_version = 25.2.9519653
+        android.sdk_version = 34
+        android.api_level = 33
         android.accept_sdk_license = True
-        android.ant_path = /usr/bin/ant
-        android.aidl_path = /usr/bin/aidl
         EOL
 
-    - name: Build APK with error handling
+    - name: Build APK
       run: |
         set -ex
         buildozer -v android debug
         
-        # Verify APK exists before copying
-        if ls bin/*.apk 1> /dev/null 2>&1; then
-          mkdir -p artifacts
+        # Verify and copy APK
+        mkdir -p artifacts
+        if ls bin/*.apk >/dev/null 2>&1; then
           cp bin/*.apk artifacts/
-          echo "APK successfully copied"
+          echo "APK successfully built and copied"
         else
           echo "::error::No APK files found in bin directory"
           ls -la bin/
